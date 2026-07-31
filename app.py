@@ -267,10 +267,12 @@ def list_vehicles():
 @require_roles("super_admin", "parking_admin", "vehicle_owner")
 def create_vehicle():
     data = request.get_json(silent=True) or {}
-    required = ("plate", "model", "owner_name", "faculty")
+    user = current_user()
+    required = ("plate", "model", "faculty")
+    if user["role"] != "vehicle_owner":
+        required += ("owner_name",)
     if any(not str(data.get(field, "")).strip() for field in required):
         return jsonify(error="Plate, model, owner name and faculty are required"), 422
-    user = current_user()
     owner_name = user["name"] if user["role"] == "vehicle_owner" else data["owner_name"].strip()
     owner_user_id = user["id"] if user["role"] == "vehicle_owner" else None
     try:

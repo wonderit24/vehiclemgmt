@@ -6,5 +6,7 @@
 /* Purple surfaces always use white text; yellow action states retain black text. */
 .sidebar,.sidebar .brand,.sidebar .brand small,.sidebar .faculty-tag,.sidebar .faculty-tag strong,.sidebar nav a,.sidebar nav a i,.sidebar .sidebar-bottom a,.sidebar .sidebar-bottom a i,.sidebar .sidebar-bottom p,.sidebar .help,.primary,#toast,.lot-alert span{color:#fff}.sidebar nav a.active,.sidebar nav a:hover,.sidebar .sidebar-bottom a:hover,.sidebar .help:hover{color:#000}.sidebar nav a.active i,.sidebar nav a:hover i,.sidebar .sidebar-bottom a:hover i,.sidebar .help:hover i{color:#000}.brand-mark,.nav-count{color:#000}.primary{color:#fff}.primary:hover{color:#fff}.secondary{color:#000}
 
+#toast.success{background:#198754;color:#fff}#toast.error{background:#b42318;color:#fff}
+
 /* Desktop profile actions and mobile-only navigation trigger. */
 .mobile-menu{display:none}.profile{position:relative;cursor:pointer}.profile-dropdown{display:none;position:absolute;top:calc(100% + 10px);right:0;z-index:8;min-width:145px;padding:7px;border:1px solid var(--line);border-radius:8px;background:#fffef9;box-shadow:0 12px 30px #45246f22}.profile.open .profile-dropdown{display:block}.profile-dropdown button{width:100%;padding:9px;border:0;border-radius:5px;background:transparent;color:#000;text-align:left;font:600 14px Arial,Helvetica,sans-serif;cursor:pointer}.profile-dropdown button:hover{background:var(--yellow)}@media(max-width:700px){.mobile-menu{display:block}}
