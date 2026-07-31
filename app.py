@@ -142,6 +142,15 @@ def initialise_database():
           check_out_at TEXT,
           recorded_by INTEGER REFERENCES users(id)
         );
+        CREATE TABLE IF NOT EXISTS parking_allocations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+          zone TEXT NOT NULL,
+          space_code TEXT NOT NULL,
+          allocated_at TEXT NOT NULL,
+          allocated_by INTEGER REFERENCES users(id),
+          active INTEGER NOT NULL DEFAULT 1
+        );
         CREATE TABLE IF NOT EXISTS activity_logs (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER REFERENCES users(id),
@@ -327,6 +336,35 @@ def create_user():
         return jsonify(ok=True), 201
     except DatabaseIntegrityError:
         return jsonify(error="An account with that email already exists"), 409
+
+
+@app.get("/api/allocations")
+@require_roles("super_admin", "parking_admin")
+def list_allocations():
+    with db() as connection:
+        rows = connection.execute("""SELECT a.id,a.zone,a.space_code,a.allocated_at,a.active,v.plate,v.model,v.owner_name
+                                     FROM parking_allocations a JOIN vehicles v ON v.id=a.vehicle_id
+                                     WHERE a.active=1 ORDER BY a.id DESC""").fetchall()
+    return jsonify(allocations=[row_dict(row) for row in rows])
+
+
+@app.post("/api/allocations")
+@require_roles("super_admin", "parking_admin")
+def create_allocation():
+    data = request.get_json(silent=True) or {}
+    vehicle_id, zone, space_code = data.get("vehicle_id"), str(data.get("zone", "")).strip(), str(data.get("space_code", "")).strip().upper()
+    if not vehicle_id or not zone or not space_code:
+        return jsonify(error="Vehicle, zone and space number are required"), 422
+    with db() as connection:
+        vehicle = connection.execute("SELECT plate FROM vehicles WHERE id=? AND active=1", (vehicle_id,)).fetchone()
+        if not vehicle:
+            return jsonify(error="Selected vehicle was not found"), 404
+        existing = connection.execute("SELECT id FROM parking_allocations WHERE zone=? AND space_code=? AND active=1", (zone, space_code)).fetchone()
+        if existing:
+            return jsonify(error="That parking space is already allocated"), 409
+        connection.execute("INSERT INTO parking_allocations (vehicle_id,zone,space_code,allocated_at,allocated_by) VALUES (?,?,?,?,?)", (vehicle_id, zone, space_code, now(), session["user_id"]))
+    audit("Parking allocation created", f"{vehicle['plate']} assigned to {zone} {space_code}")
+    return jsonify(ok=True), 201
 
 
 @app.get("/api/reports/<report_name>")
