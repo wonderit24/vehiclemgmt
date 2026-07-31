@@ -264,15 +264,18 @@ def list_vehicles():
 
 
 @app.post("/api/vehicles")
-@require_roles("super_admin", "parking_admin")
+@require_roles("super_admin", "parking_admin", "vehicle_owner")
 def create_vehicle():
     data = request.get_json(silent=True) or {}
     required = ("plate", "model", "owner_name", "faculty")
     if any(not str(data.get(field, "")).strip() for field in required):
         return jsonify(error="Plate, model, owner name and faculty are required"), 422
+    user = current_user()
+    owner_name = user["name"] if user["role"] == "vehicle_owner" else data["owner_name"].strip()
+    owner_user_id = user["id"] if user["role"] == "vehicle_owner" else None
     try:
         with db() as connection:
-            connection.execute("INSERT INTO vehicles (plate,model,owner_name,faculty,category,colour,created_at) VALUES (?,?,?,?,?,?,?)", (data["plate"].upper().strip(), data["model"].strip(), data["owner_name"].strip(), data["faculty"], data.get("category", "Staff"), data.get("colour", "").strip(), now()))
+            connection.execute("INSERT INTO vehicles (plate,model,owner_name,faculty,category,colour,owner_user_id,created_at) VALUES (?,?,?,?,?,?,?,?)", (data["plate"].upper().strip(), data["model"].strip(), owner_name, data["faculty"], data.get("category", "Staff"), data.get("colour", "").strip(), owner_user_id, now()))
         audit("Vehicle registered", data["plate"].upper().strip())
         return jsonify(ok=True), 201
     except DatabaseIntegrityError:
