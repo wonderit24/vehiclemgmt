@@ -367,6 +367,16 @@ def create_allocation():
     return jsonify(ok=True), 201
 
 
+@app.get("/api/activity")
+@require_roles("super_admin", "parking_admin", "security_officer")
+def list_activity():
+    with db() as connection:
+        rows = connection.execute("""SELECT a.action,a.detail,a.created_at,COALESCE(u.name,'System') AS user_name
+                                     FROM activity_logs a LEFT JOIN users u ON u.id=a.user_id
+                                     ORDER BY a.id DESC LIMIT 100""").fetchall()
+    return jsonify(activity=[row_dict(row) for row in rows])
+
+
 @app.get("/api/reports/<report_name>")
 @require_roles("super_admin", "parking_admin")
 def report(report_name):

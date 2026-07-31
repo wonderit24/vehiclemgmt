@@ -14,3 +14,6 @@
 
 /* Desktop profile actions and mobile-only navigation trigger. */
 .mobile-menu{display:none}.profile{position:relative;cursor:pointer}.profile-dropdown{display:none;position:absolute;top:calc(100% + 10px);right:0;z-index:8;min-width:145px;padding:7px;border:1px solid var(--line);border-radius:8px;background:#fffef9;box-shadow:0 12px 30px #45246f22}.profile.open .profile-dropdown{display:block}.profile-dropdown button{width:100%;padding:9px;border:0;border-radius:5px;background:transparent;color:#000;text-align:left;font:600 14px Arial,Helvetica,sans-serif;cursor:pointer}.profile-dropdown button:hover{background:var(--yellow)}@media(max-width:700px){.mobile-menu{display:block}}
+
+/* Keep action labels readable and keyboard controls visible at every viewport. */
+.primary{color:#fff}.primary:hover,.primary:focus-visible{color:#fff}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--purple-dark);outline-offset:2px}
