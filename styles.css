@@ -17,3 +17,4 @@
 
 /* Keep action labels readable and keyboard controls visible at every viewport. */
 .primary{color:#fff}.primary:hover,.primary:focus-visible{color:#fff}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--purple-dark);outline-offset:2px}
+.menu-backdrop{display:none}@media(max-width:700px){.menu-backdrop.show{display:block;position:fixed;inset:0;z-index:3;border:0;background:#0006;cursor:pointer}}
