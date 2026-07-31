@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import csv
 import io
@@ -13,17 +13,65 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 ROOT = Path(__file__).resolve().parent
 DATABASE = ROOT / "delspark.db"
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+USING_POSTGRES = DATABASE_URL.startswith(("postgres://", "postgresql://"))
+if USING_POSTGRES:
+    from psycopg import IntegrityError as DatabaseIntegrityError
+else:
+    DatabaseIntegrityError = sqlite3.IntegrityError
 ROLES = ("super_admin", "parking_admin", "security_officer", "vehicle_owner")
 
 app = Flask(__name__, static_folder=None)
 app.config.update(SECRET_KEY=os.environ.get("DELSPARK_SECRET_KEY", "change-this-secret-before-production"), SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax")
 
 
+class DatabaseConnection:
+    """Use SQLite locally and PostgreSQL when DATABASE_URL is configured."""
+    def __init__(self, connection, postgres=False):
+        self.connection = connection
+        self.postgres = postgres
+
+    def _sql(self, statement):
+        return statement.replace("?", "%s") if self.postgres else statement
+
+    def execute(self, statement, values=()):
+        return self.connection.execute(self._sql(statement), values)
+
+    def executemany(self, statement, values):
+        if self.postgres:
+            with self.connection.cursor() as cursor:
+                return cursor.executemany(self._sql(statement), values)
+        return self.connection.executemany(self._sql(statement), values)
+
+    def executescript(self, script):
+        if not self.postgres:
+            return self.connection.executescript(script)
+        script = script.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+        with self.connection.cursor() as cursor:
+            for statement in script.split(";"):
+                if statement.strip():
+                    cursor.execute(statement)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        if exc_type:
+            self.connection.rollback()
+        else:
+            self.connection.commit()
+        self.connection.close()
+
+
 def db():
+    if USING_POSTGRES:
+        from psycopg import connect
+        from psycopg.rows import dict_row
+        return DatabaseConnection(connect(DATABASE_URL, row_factory=dict_row, prepare_threshold=None), postgres=True)
     connection = sqlite3.connect(DATABASE)
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+    return DatabaseConnection(connection)
 
 
 def audit(action: str, detail: str, user_id: int | None = None):
@@ -171,13 +219,19 @@ def signup():
         return jsonify(error="Enter your name, a valid email, and a password with at least 8 characters"), 422
     try:
         with db() as connection:
-            cursor = connection.execute("INSERT INTO users (name,email,password_hash,role,faculty_scope,created_at) VALUES (?,?,?,?,?,?)", (name, email, generate_password_hash(password), "vehicle_owner", "Vehicle Owner", now()))
-            user_id = cursor.lastrowid
+            query = "INSERT INTO users (name,email,password_hash,role,faculty_scope,created_at) VALUES (?,?,?,?,?,?)"
+            values = (name, email, generate_password_hash(password), "vehicle_owner", "Vehicle Owner", now())
+            if USING_POSTGRES:
+                cursor = connection.execute(query + " RETURNING id", values)
+                user_id = cursor.fetchone()["id"]
+            else:
+                cursor = connection.execute(query, values)
+                user_id = cursor.lastrowid
         audit("Vehicle Owner account created", email, user_id)
         session.clear()
         session["user_id"] = user_id
         return jsonify(ok=True), 201
-    except sqlite3.IntegrityError:
+    except DatabaseIntegrityError:
         return jsonify(error="An account with that email already exists"), 409
 
 
@@ -221,7 +275,7 @@ def create_vehicle():
             connection.execute("INSERT INTO vehicles (plate,model,owner_name,faculty,category,colour,created_at) VALUES (?,?,?,?,?,?,?)", (data["plate"].upper().strip(), data["model"].strip(), data["owner_name"].strip(), data["faculty"], data.get("category", "Staff"), data.get("colour", "").strip(), now()))
         audit("Vehicle registered", data["plate"].upper().strip())
         return jsonify(ok=True), 201
-    except sqlite3.IntegrityError:
+    except DatabaseIntegrityError:
         return jsonify(error="A vehicle with that plate number already exists"), 409
 
 
@@ -266,7 +320,7 @@ def create_user():
             connection.execute("INSERT INTO users (name,email,password_hash,role,faculty_scope,created_at) VALUES (?,?,?,?,?,?)", (data["name"].strip(), data["email"].strip().lower(), generate_password_hash(data["password"]), data["role"], data.get("faculty_scope", "All faculties"), now()))
         audit("User created", data["email"])
         return jsonify(ok=True), 201
-    except sqlite3.IntegrityError:
+    except DatabaseIntegrityError:
         return jsonify(error="An account with that email already exists"), 409
 
 

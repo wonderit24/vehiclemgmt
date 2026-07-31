@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 delspark.db
 .env
+backup_diet_project_20260730/
