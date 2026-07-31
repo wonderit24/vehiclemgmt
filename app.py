@@ -3,6 +3,7 @@
 import csv
 import io
 import os
+import secrets
 import sqlite3
 from datetime import datetime, timezone
 from functools import wraps
@@ -119,6 +120,7 @@ def initialise_database():
           role TEXT NOT NULL CHECK(role IN ('super_admin','parking_admin','security_officer','vehicle_owner')),
           faculty_scope TEXT NOT NULL DEFAULT 'All faculties',
           active INTEGER NOT NULL DEFAULT 1,
+          referral_code TEXT,
           created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS vehicles (
@@ -159,6 +161,13 @@ def initialise_database():
           created_at TEXT NOT NULL
         );
         """)
+        if USING_POSTGRES:
+            connection.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT")
+        else:
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(users)").fetchall()}
+            if "referral_code" not in columns:
+                connection.execute("ALTER TABLE users ADD COLUMN referral_code TEXT")
+        connection.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_unique ON users(referral_code)")
         if not connection.execute("SELECT 1 FROM users LIMIT 1").fetchone():
             seed_users = [
                 ("Admin Officer", "admin@delsu.edu.ng", "Admin@123", "super_admin", "All faculties"),
@@ -319,7 +328,7 @@ def gate_operation(operation):
 @require_roles("super_admin")
 def list_users():
     with db() as connection:
-        users = connection.execute("SELECT id,name,email,role,faculty_scope,active,created_at FROM users ORDER BY id").fetchall()
+        users = connection.execute("SELECT id,name,email,role,faculty_scope,active,referral_code,created_at FROM users ORDER BY id").fetchall()
     return jsonify(users=[row_dict(user) for user in users])
 
 
@@ -331,11 +340,14 @@ def create_user():
         return jsonify(error="Name, email, password and a valid role are required"), 422
     try:
         with db() as connection:
-            connection.execute("INSERT INTO users (name,email,password_hash,role,faculty_scope,created_at) VALUES (?,?,?,?,?,?)", (data["name"].strip(), data["email"].strip().lower(), generate_password_hash(data["password"]), data["role"], data.get("faculty_scope", "All faculties"), now()))
+            referral_code = str(data.get("referral_code") or "").strip().upper()
+            if not referral_code:
+                referral_code = f"DSP-{secrets.token_hex(4).upper()}"
+            connection.execute("INSERT INTO users (name,email,password_hash,role,faculty_scope,referral_code,created_at) VALUES (?,?,?,?,?,?,?)", (data["name"].strip(), data["email"].strip().lower(), generate_password_hash(data["password"]), data["role"], data.get("faculty_scope", "All faculties"), referral_code, now()))
         audit("User created", data["email"])
-        return jsonify(ok=True), 201
+        return jsonify(ok=True, referral_code=referral_code), 201
     except DatabaseIntegrityError:
-        return jsonify(error="An account with that email already exists"), 409
+        return jsonify(error="That email address or referral code is already in use"), 409
 
 
 @app.get("/api/allocations")
